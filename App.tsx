@@ -139,10 +139,19 @@ const App: React.FC = () => {
     }
   };
 
-  const handleDownload = () => {
+  const handleDownload = (filename: string) => {
     if (!rubric) return;
-    const csv = generateClassroomCSV(rubric);
-    downloadCSV(csv, 'vertinimo_lentele.csv');
+    
+    let finalFilename = filename.trim();
+    if (!finalFilename) finalFilename = 'rubric.csv';
+    if (!finalFilename.toLowerCase().endsWith('.csv')) {
+      finalFilename += '.csv';
+    }
+    
+    const title = finalFilename.replace(/\.csv$/i, '');
+    const csv = generateClassroomCSV(rubric, title);
+    
+    downloadCSV(csv, finalFilename);
   };
 
   const handleSave = () => {
@@ -161,7 +170,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSaveToDrive = () => {
+  const handleSaveToDrive = (filename: string) => {
     if (!rubric) return;
     if (!GOOGLE_CLIENT_ID) {
       setError({
@@ -169,6 +178,19 @@ const App: React.FC = () => {
         message: "Google Drive integracija nesukonfigūruota.",
         suggestion: "Pridėkite GOOGLE_CLIENT_ID kode."
       });
+      return;
+    }
+
+    if (!driveApiReady) {
+      setError({
+        title: "Google API kraunasi",
+        message: "Google paslaugos dar nėra pilnai užsikrovusios.",
+        suggestion: "Palaukite kelias sekundes ir bandykite vėl."
+      });
+      return;
+    }
+
+    if (!window.confirm('Are you sure you want to save to Google Drive?')) {
       return;
     }
 
@@ -186,21 +208,61 @@ const App: React.FC = () => {
           setIsSavingToDrive(false);
           return;
         }
-        await uploadToDrive(response.access_token);
+        // Use Picker to select folder
+        createFolderPicker(response.access_token, filename);
       },
     });
     tokenClient.requestAccessToken();
   };
 
-  const uploadToDrive = async (accessToken: string) => {
+  const createFolderPicker = (oauthToken: string, filename: string) => {
+    if (!window.google || !window.google.picker) {
+        setError({
+            title: "Google Picker API Error",
+            message: "Google Picker API nepavyko užkrauti.",
+        });
+        setIsSavingToDrive(false);
+        return;
+    }
+
+    const docsView = new window.google.picker.DocsView(window.google.picker.ViewId.FOLDERS)
+      .setSelectFolderEnabled(true)
+      .setMimeTypes('application/vnd.google-apps.folder');
+
+    const picker = new window.google.picker.PickerBuilder()
+        .addView(docsView)
+        .setOAuthToken(oauthToken)
+        .setDeveloperKey(process.env.API_KEY)
+        .setCallback((data: any) => folderPickerCallback(data, oauthToken, filename))
+        .setTitle('Pasirinkite aplanką išsaugojimui')
+        .build();
+    picker.setVisible(true);
+  };
+
+  const folderPickerCallback = async (data: any, oauthToken: string, filename: string) => {
+    if (data.action === window.google.picker.Action.PICKED) {
+      const doc = data.docs[0];
+      const folderId = doc.id;
+      await uploadToDrive(oauthToken, folderId, filename);
+    } else if (data.action === window.google.picker.Action.CANCEL) {
+      setIsSavingToDrive(false);
+    }
+  };
+
+  const uploadToDrive = async (accessToken: string, folderId: string, filename: string) => {
     if (!rubric) return;
     try {
-      const csvContent = generateClassroomCSV(rubric);
-      const fileName = `RubricAI - Vertinimo kriterijai ${new Date().toISOString().split('T')[0]}.csv`;
+      let safeFilename = filename.trim();
+      if (!safeFilename) safeFilename = 'rubric.csv';
+      if (!safeFilename.toLowerCase().endsWith('.csv')) safeFilename += '.csv';
+
+      const title = safeFilename.replace(/\.csv$/i, '');
+      const csvContent = generateClassroomCSV(rubric, title);
       
       const metadata = {
-        name: fileName,
+        name: safeFilename,
         mimeType: 'text/csv',
+        parents: [folderId]
       };
 
       const form = new FormData();
@@ -638,6 +700,41 @@ const App: React.FC = () => {
               <li>Gautą CSV failą galite tiesiogiai įkelti į Google Classroom.</li>
             </ul>
           </div>
+
+          {!GOOGLE_CLIENT_ID && (
+            <div className="bg-amber-50 rounded-xl border border-amber-200 p-6">
+              <h3 className="text-amber-900 font-semibold mb-3 text-sm flex items-center gap-2">
+                <AlertCircle size={16} />
+                API Raktų Konfigūracija
+              </h3>
+              <p className="text-sm text-amber-800 mb-3 leading-relaxed">
+                Šis pranešimas rodomas, nes nenustatytas <code>GOOGLE_CLIENT_ID</code>. Norėdami pilnai naudotis sistema:
+              </p>
+              <ul className="space-y-3 text-sm text-amber-800">
+                <li className="flex gap-2 items-start">
+                  <span className="font-bold text-amber-600">1.</span>
+                  <div>
+                    <span className="font-semibold">Gemini API:</span> Gaukite raktą iš{' '}
+                    <a 
+                      href="https://ai.google.dev/gemini-api/docs/api-key" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="underline font-medium text-amber-900 hover:text-amber-700"
+                    >
+                      Google AI Studio
+                    </a>
+                    {' '}ir nustatykite aplinkos kintamąjį <code>API_KEY</code>.
+                  </div>
+                </li>
+                <li className="flex gap-2 items-start">
+                  <span className="font-bold text-amber-600">2.</span>
+                  <div>
+                    <span className="font-semibold">Google Drive:</span> Sukurkite OAuth Client ID Google Cloud Console ir įklijuokite į <code>App.tsx</code> kintamąjį <code>GOOGLE_CLIENT_ID</code>.
+                  </div>
+                </li>
+              </ul>
+            </div>
+          )}
         </div>
 
         {/* Output Column */}

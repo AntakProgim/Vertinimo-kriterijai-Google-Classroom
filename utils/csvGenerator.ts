@@ -15,14 +15,14 @@ import { RubricData } from '../types';
  * Row D: Level Title (Cells B, C, D...)
  * Row E: Level Description (Cells B, C, D...)
  */
-export const generateClassroomCSV = (rubric: RubricData): string => {
+export const generateClassroomCSV = (rubric: RubricData, title: string = 'Vertinimo kriterijai'): string => {
   const rows: string[][] = [];
 
   // Headers required for Spreadsheet import format
   rows.push(['Rekomenduojama neredaguoti rubrikų skaičiuoklės formatu']);
   rows.push(['v1.0-s']);
-  // We don't have the exact assignment title in RubricData, using a generic one
-  rows.push(['Vertinimo kriterijai']); 
+  // Use provided title or default
+  rows.push([title]); 
 
   rubric.criteria.forEach((criterion) => {
     // Sort levels by points descending

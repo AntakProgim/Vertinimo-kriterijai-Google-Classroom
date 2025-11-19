@@ -1,12 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { RubricData, RubricCriterion, RubricLevel } from '../types';
-import { Download, Table, Calculator, Save, Edit2, HardDrive, Loader2 } from 'lucide-react';
+import { Download, Table, Calculator, Save, HardDrive, Loader2, FileType } from 'lucide-react';
 
 interface RubricPreviewProps {
   rubric: RubricData | null;
-  onDownload: () => void;
+  onDownload: (filename: string) => void;
   onSave: () => void;
-  onSaveToDrive: () => void;
+  onSaveToDrive: (filename: string) => void;
   isSavingToDrive?: boolean;
   onRubricChange: (rubric: RubricData) => void;
 }
@@ -19,6 +19,8 @@ export const RubricPreview: React.FC<RubricPreviewProps> = ({
   isSavingToDrive = false,
   onRubricChange 
 }) => {
+  const [filename, setFilename] = useState('rubric.csv');
+
   if (!rubric || rubric.criteria.length === 0) {
     return (
       <div className="h-full flex flex-col items-center justify-center text-slate-400 bg-white rounded-xl border border-slate-200 p-12 min-h-[400px]">
@@ -76,25 +78,38 @@ export const RubricPreview: React.FC<RubricPreviewProps> = ({
             title="Išsaugoti naršyklėje"
           >
             <Save size={16} />
-            Išsaugoti
+            <span className="hidden lg:inline">Išsaugoti</span>
           </button>
           
           <button
-            onClick={onSaveToDrive}
+            onClick={() => onSaveToDrive(filename)}
             disabled={isSavingToDrive}
             className="flex items-center gap-2 bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 px-3 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
             title="Įkelti į Google Drive"
           >
             {isSavingToDrive ? <Loader2 size={16} className="animate-spin" /> : <HardDrive size={16} />}
-            Į Drive
+            <span className="hidden lg:inline">Į Drive</span>
           </button>
 
+          <div className="h-6 w-px bg-slate-300 mx-1"></div>
+
+          <div className="relative flex items-center group">
+             <FileType size={14} className="absolute left-2.5 text-slate-400 group-focus-within:text-blue-500 pointer-events-none" />
+             <input
+                type="text"
+                value={filename}
+                onChange={(e) => setFilename(e.target.value)}
+                className="w-36 pl-8 pr-2 py-2 bg-white border border-slate-300 rounded-l-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 hover:border-slate-400 transition-colors text-slate-700"
+                placeholder="failas.csv"
+             />
+          </div>
+
           <button
-            onClick={onDownload}
-            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
+            onClick={() => onDownload(filename)}
+            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-r-lg text-sm font-medium transition-colors shadow-sm -ml-2 z-10 border border-green-600"
           >
             <Download size={16} />
-            Atsisiųsti CSV
+            <span className="hidden sm:inline">Atsisiųsti</span>
           </button>
         </div>
       </div>
