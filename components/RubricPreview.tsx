@@ -54,6 +54,12 @@ export const RubricPreview: React.FC<RubricPreviewProps> = ({
     onRubricChange({ ...rubric, criteria: newCriteria });
   };
 
+  const handleBlur = () => {
+    if (!filename.trim()) {
+      setFilename('rubric.csv');
+    }
+  };
+
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col h-full overflow-hidden">
       <div className="p-4 border-b border-slate-200 flex flex-col xl:flex-row justify-between items-start xl:items-center bg-slate-50 gap-4">
@@ -99,6 +105,7 @@ export const RubricPreview: React.FC<RubricPreviewProps> = ({
                 type="text"
                 value={filename}
                 onChange={(e) => setFilename(e.target.value)}
+                onBlur={handleBlur}
                 className="w-36 pl-8 pr-2 py-2 bg-white border border-slate-300 rounded-l-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 hover:border-slate-400 transition-colors text-slate-700"
                 placeholder="failas.csv"
              />
