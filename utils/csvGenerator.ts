@@ -3,10 +3,10 @@ import { RubricData } from '../types';
 /**
  * Converts rubric data to a CSV string format compatible with Google Classroom (Spreadsheet style).
  * 
- * Structure based on Google Classroom export format:
+ * Structure based on Google Classroom export format (v1.0-s):
  * Row 1: Warning header
  * Row 2: Version
- * Row 3: Assignment Title
+ * Row 3+: Criterion blocks (No global assignment title row in v1.0-s)
  * 
  * For each criterion:
  * Row A: Criterion Title
@@ -15,21 +15,21 @@ import { RubricData } from '../types';
  * Row D: Level Title (Cells B, C, D...)
  * Row E: Level Description (Cells B, C, D...)
  */
-export const generateClassroomCSV = (rubric: RubricData, title: string = 'Vertinimo kriterijai'): string => {
+export const generateClassroomCSV = (rubric: RubricData): string => {
   const rows: string[][] = [];
 
   // Headers required for Spreadsheet import format
-  // These headers help Classroom identify the file structure
+  // v1.0-s does NOT use a separate assignment title row between version and first criterion
   rows.push(['Rekomenduojama neredaguoti rubrikų skaičiuoklės formatu']);
   rows.push(['v1.0-s']);
-  rows.push([title]); 
 
   rubric.criteria.forEach((criterion) => {
     // Sort levels by points descending
     const sortedLevels = [...criterion.levels].sort((a, b) => b.points - a.points);
 
     // Row 1: Criterion Title
-    rows.push([criterion.title]);
+    // Ensure title is present, defaulting to empty string if missing, to preserve row structure
+    rows.push([criterion.title || '']);
 
     // Row 2: Criterion Description (MUST exist to preserve block structure)
     rows.push([criterion.description || '']);
@@ -41,7 +41,7 @@ export const generateClassroomCSV = (rubric: RubricData, title: string = 'Vertin
 
     // Row 4: Level Title (shifted by 1 column to right)
     const titleRow = [''];
-    sortedLevels.forEach(l => titleRow.push(l.title));
+    sortedLevels.forEach(l => titleRow.push(l.title || ''));
     rows.push(titleRow);
 
     // Row 5: Level Description (shifted by 1 column to right)
@@ -53,8 +53,9 @@ export const generateClassroomCSV = (rubric: RubricData, title: string = 'Vertin
   // Convert to CSV string
   return rows.map(row => 
     row.map(cell => {
-      // Escape double quotes by doubling them
-      const escaped = cell.replace(/"/g, '""');
+      // Ensure cell is string and escape double quotes
+      const cellStr = cell || '';
+      const escaped = cellStr.replace(/"/g, '""');
       // Always wrap in quotes to ensure structure is preserved
       return `"${escaped}"`;
     }).join(',')
