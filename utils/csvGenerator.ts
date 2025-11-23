@@ -21,7 +21,7 @@ export const generateClassroomCSV = (rubric: RubricData, title: string = 'Vertin
   // Headers required for Spreadsheet import format
   rows.push(['Rekomenduojama neredaguoti rubrikų skaičiuoklės formatu']);
   rows.push(['v1.0-s']);
-  // Use provided title or default. This satisfies the requirement to include the assignment title.
+  // Use provided title or default.
   rows.push([title]); 
 
   rubric.criteria.forEach((criterion) => {

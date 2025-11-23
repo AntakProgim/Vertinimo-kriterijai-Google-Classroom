@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, GraduationCap, AlertCircle, Loader2, ExternalLink, Settings2, CheckCircle, Upload, FileText, X, File as FileIcon, HardDrive, HelpCircle } from 'lucide-react';
+import { Sparkles, GraduationCap, AlertCircle, Loader2, ExternalLink, Settings2, CheckCircle, Upload, X, File as FileIcon, HardDrive, HelpCircle } from 'lucide-react';
 import { generateRubricFromGemini } from './services/geminiService';
 import { generateClassroomCSV, downloadCSV } from './utils/csvGenerator';
 import { RubricData, GenerationStatus } from './types';
