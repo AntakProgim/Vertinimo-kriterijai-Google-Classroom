@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, GraduationCap, AlertCircle, Loader2, ExternalLink, Settings2, CheckCircle, Upload, X, File as FileIcon, HardDrive, HelpCircle } from 'lucide-react';
+import { Sparkles, GraduationCap, AlertCircle, Loader2, ExternalLink, Settings2, CheckCircle, Upload, X, File as FileIcon, HardDrive, HelpCircle, Settings } from 'lucide-react';
 import { generateRubricFromGemini } from './services/geminiService';
 import { generateClassroomCSV, downloadCSV } from './utils/csvGenerator';
 import { RubricData, GenerationStatus } from './types';
 import { RubricPreview } from './components/RubricPreview';
+import { API_KEY } from './config';
 
-// IMPORTANT: To use Google Drive, you must create a Project in Google Cloud Console,
-// enable "Google Drive API" and "Google Picker API", and create an OAuth 2.0 Client ID.
-// Paste your Client ID below.
-const GOOGLE_CLIENT_ID = ''; // e.g., "123456789-xxx.apps.googleusercontent.com"
+// Default fallback if set in code. 
+// Users can also set this via the UI which saves to localStorage.
+const DEFAULT_CLIENT_ID = ''; 
+
 // Added drive.file to allow creating files, kept readonly for Picker access to existing files
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file';
 
@@ -41,8 +42,18 @@ const App: React.FC = () => {
   const [attachedFile, setAttachedFile] = useState<AttachedFile | null>(null);
   const [driveApiReady, setDriveApiReady] = useState(false);
   const [isSavingToDrive, setIsSavingToDrive] = useState(false);
-  const [showConfigWarning, setShowConfigWarning] = useState(true);
   
+  // Configuration State
+  const [googleClientId, setGoogleClientId] = useState<string>(() => {
+    if (typeof localStorage !== 'undefined') {
+      return localStorage.getItem('google_client_id') || DEFAULT_CLIENT_ID;
+    }
+    return DEFAULT_CLIENT_ID;
+  });
+  const [showConfigWarning, setShowConfigWarning] = useState(true);
+  const [showSettings, setShowSettings] = useState(false);
+  const [tempClientId, setTempClientId] = useState('');
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Load rubric from localStorage on mount
@@ -75,15 +86,23 @@ const App: React.FC = () => {
     return () => clearInterval(checkGoogle);
   }, []);
 
+  const handleSaveClientId = () => {
+    const cleaned = tempClientId.trim();
+    if (cleaned) {
+      setGoogleClientId(cleaned);
+      localStorage.setItem('google_client_id', cleaned);
+      setTempClientId('');
+      setShowSettings(false); // Close settings if open
+    }
+  };
+
   const handleGenerate = async () => {
     if (!assignmentText.trim() && !attachedFile) return;
 
     setStatus(GenerationStatus.GENERATING);
     setError(null);
     
-    const apiKey = process.env.API_KEY;
-
-    if (!apiKey) {
+    if (!API_KEY) {
       setError({
         title: "Konfigūracijos klaida",
         message: "Sistemoje nerastas API raktas (API_KEY).",
@@ -98,7 +117,6 @@ const App: React.FC = () => {
     try {
       const data = await generateRubricFromGemini(
         assignmentText, 
-        apiKey, 
         targetScore, 
         attachedFile ? { mimeType: attachedFile.mimeType, data: attachedFile.data } : undefined
       );
@@ -149,8 +167,8 @@ const App: React.FC = () => {
       finalFilename += '.csv';
     }
     
-    const title = finalFilename.replace(/\.csv$/i, '');
-    const csv = generateClassroomCSV(rubric, title);
+    // Call without title, as per v1.0-s format
+    const csv = generateClassroomCSV(rubric);
     
     downloadCSV(csv, finalFilename);
   };
@@ -173,12 +191,14 @@ const App: React.FC = () => {
 
   const handleSaveToDrive = (filename: string) => {
     if (!rubric) return;
-    if (!GOOGLE_CLIENT_ID) {
+    
+    if (!googleClientId) {
       setError({
         title: "Nėra Client ID",
         message: "Google Drive integracija nesukonfigūruota.",
-        suggestion: "Pridėkite GOOGLE_CLIENT_ID kode norėdami naudoti Drive funkciją."
+        suggestion: "Įveskite Client ID nustatymuose (krumpliaratis viršuje) arba šoniniame skydelyje."
       });
+      setShowSettings(true); // Open settings to help user
       return;
     }
 
@@ -198,13 +218,14 @@ const App: React.FC = () => {
     setIsSavingToDrive(true);
 
     const tokenClient = window.google.accounts.oauth2.initTokenClient({
-      client_id: GOOGLE_CLIENT_ID,
+      client_id: googleClientId,
       scope: DRIVE_SCOPE,
       callback: async (response: any) => {
         if (response.error !== undefined) {
           setError({
             title: "Autentifikavimo klaida",
             message: "Nepavyko prisijungti prie Google paskyros.",
+            suggestion: "Patikrinkite ar Client ID yra teisingas."
           });
           setIsSavingToDrive(false);
           return;
@@ -233,7 +254,7 @@ const App: React.FC = () => {
     const picker = new window.google.picker.PickerBuilder()
         .addView(docsView)
         .setOAuthToken(oauthToken)
-        .setDeveloperKey(process.env.API_KEY)
+        .setDeveloperKey(API_KEY)
         .setCallback((data: any) => folderPickerCallback(data, oauthToken, filename))
         .setTitle('Pasirinkite aplanką išsaugojimui')
         .build();
@@ -257,8 +278,8 @@ const App: React.FC = () => {
       if (!safeFilename) safeFilename = 'rubric.csv';
       if (!safeFilename.toLowerCase().endsWith('.csv')) safeFilename += '.csv';
 
-      const title = safeFilename.replace(/\.csv$/i, '');
-      const csvContent = generateClassroomCSV(rubric, title);
+      // Call without title
+      const csvContent = generateClassroomCSV(rubric);
       
       const metadata = {
         name: safeFilename,
@@ -378,12 +399,13 @@ const App: React.FC = () => {
   const handleDriveClick = (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent triggering the parent file input click
 
-    if (!GOOGLE_CLIENT_ID) {
+    if (!googleClientId) {
       setError({
         title: "Nėra Client ID",
-        message: "Google Drive integracija nesukonfigūruota (trūksta GOOGLE_CLIENT_ID).",
-        suggestion: "Jei esate kūrėjas, pridėkite ID App.tsx faile."
+        message: "Google Drive integracija nesukonfigūruota.",
+        suggestion: "Įveskite Client ID nustatymuose."
       });
+      setShowSettings(true);
       return;
     }
 
@@ -397,7 +419,7 @@ const App: React.FC = () => {
     }
 
     const tokenClient = window.google.accounts.oauth2.initTokenClient({
-      client_id: GOOGLE_CLIENT_ID,
+      client_id: googleClientId,
       scope: DRIVE_SCOPE,
       callback: async (response: any) => {
         if (response.error !== undefined) {
@@ -405,7 +427,7 @@ const App: React.FC = () => {
           setError({
             title: "Prisijungimo klaida",
             message: "Nepavyko prisijungti prie Google Drive.",
-            suggestion: "Patikrinkite, ar leidote iššokančius langus."
+            suggestion: "Patikrinkite Client ID ir ar leidote iššokančius langus."
           });
           return;
         }
@@ -421,7 +443,7 @@ const App: React.FC = () => {
     const picker = new window.google.picker.PickerBuilder()
         .addView(window.google.picker.ViewId.DOCS)
         .setOAuthToken(oauthToken)
-        .setDeveloperKey(process.env.API_KEY)
+        .setDeveloperKey(API_KEY)
         .setCallback((data: any) => pickerCallback(data, oauthToken))
         .build();
     picker.setVisible(true);
@@ -446,7 +468,7 @@ const App: React.FC = () => {
       }
 
       try {
-        setStatus(GenerationStatus.GENERATING); // Show loading while downloading
+        setStatus(GenerationStatus.GENERATING); 
         const response = await fetch(url, {
           headers: { Authorization: `Bearer ${oauthToken}` }
         });
@@ -457,7 +479,6 @@ const App: React.FC = () => {
 
         const blob = await response.blob();
         
-        // Validate size
         if (blob.size > 10 * 1024 * 1024) {
           throw new Error("Failas per didelis (Maks 10MB).");
         }
@@ -482,7 +503,7 @@ const App: React.FC = () => {
         setError({
           title: "Failo atsisiuntimo klaida",
           message: "Nepavyko gauti failo iš Google Drive.",
-          suggestion: "Patikrinkite, ar turite teises atsisiųsti šį failą, arba ar jis nėra per didelis."
+          suggestion: "Patikrinkite, ar turite teises atsisiųsti šį failą."
         });
         setStatus(GenerationStatus.IDLE);
       }
@@ -502,20 +523,70 @@ const App: React.FC = () => {
             </div>
             <h1 className="text-xl font-bold text-slate-900 tracking-tight">Vertinimo kriterijai <span className="text-slate-400 font-normal">skirti Google Classroom užduotims</span></h1>
           </div>
-          <a 
-            href="https://support.google.com/edu/classroom/answer/9335069" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="text-sm text-slate-500 hover:text-blue-600 flex items-center gap-1 transition-colors"
-          >
-            Pagalbos centras <ExternalLink size={14} />
-          </a>
+          
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setShowSettings(!showSettings)}
+              className="p-2 text-slate-500 hover:text-blue-600 hover:bg-slate-50 rounded-lg transition-colors relative"
+              title="Nustatymai"
+            >
+              <Settings size={20} />
+              {!googleClientId && <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border border-white"></span>}
+            </button>
+            <a 
+              href="https://support.google.com/edu/classroom/answer/9335069" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-sm text-slate-500 hover:text-blue-600 flex items-center gap-1 transition-colors hidden sm:flex"
+            >
+              Pagalbos centras <ExternalLink size={14} />
+            </a>
+          </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8 grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <main className="flex-1 max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8 grid grid-cols-1 lg:grid-cols-12 gap-6 relative">
         
+        {/* Settings Modal/Panel Overlay */}
+        {showSettings && (
+          <div className="absolute top-4 right-4 lg:right-auto lg:left-4 z-30 w-80 bg-white shadow-xl rounded-xl border border-slate-200 p-6 animate-in fade-in zoom-in-95 duration-200">
+             <div className="flex justify-between items-center mb-4">
+               <h3 className="font-semibold text-slate-800 flex items-center gap-2">
+                 <Settings2 size={18} /> Nustatymai
+               </h3>
+               <button onClick={() => setShowSettings(false)} className="text-slate-400 hover:text-slate-600">
+                 <X size={18} />
+               </button>
+             </div>
+             
+             <div className="mb-4">
+               <label className="block text-xs font-bold text-slate-700 mb-2 uppercase">Google Client ID</label>
+               <input
+                 type="text"
+                 value={tempClientId}
+                 onChange={(e) => setTempClientId(e.target.value)}
+                 placeholder={googleClientId || "Pvz: 123...apps.googleusercontent.com"}
+                 className="w-full text-sm p-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none mb-2"
+               />
+               <p className="text-xs text-slate-500 mb-3">Reikalingas "Save to Drive" ir failų pasirinkimo funkcijoms.</p>
+               
+               <button 
+                 onClick={handleSaveClientId}
+                 className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm py-2 rounded-lg font-medium transition-colors"
+               >
+                 Išsaugoti
+               </button>
+             </div>
+             
+             {googleClientId && (
+               <div className="p-3 bg-green-50 border border-green-200 rounded text-xs text-green-700 flex gap-2 items-center">
+                 <CheckCircle size={14} /> Client ID sukonfigūruotas
+               </div>
+             )}
+          </div>
+        )}
+
         {/* Input Column */}
         <div className="lg:col-span-5 flex flex-col gap-6">
           <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
@@ -702,8 +773,8 @@ const App: React.FC = () => {
             </ul>
           </div>
 
-          {!GOOGLE_CLIENT_ID && showConfigWarning && (
-            <div className="relative bg-amber-50 rounded-xl border border-amber-200 p-6">
+          {!googleClientId && showConfigWarning && (
+            <div className="relative bg-amber-50 rounded-xl border border-amber-200 p-6 transition-all">
               <button 
                 onClick={() => setShowConfigWarning(false)}
                 className="absolute top-2 right-2 p-1 text-amber-500 hover:bg-amber-100 rounded-full transition-colors"
@@ -716,21 +787,28 @@ const App: React.FC = () => {
                 Konfigūracija
               </h3>
               <p className="text-sm text-amber-800 mb-3 leading-relaxed">
-                Norėdami naudotis Google Drive funkcija, turite sukonfigūruoti Client ID. Generavimui (DI) pakanka API rakto.
+                Norėdami naudotis Google Drive funkcija, turite įvesti <strong>Client ID</strong>.
               </p>
-              <ul className="space-y-3 text-sm text-amber-800">
-                <li className="flex gap-2 items-start">
-                  <span className="font-bold text-amber-600">1.</span>
-                  <div>
-                    <span className="font-semibold">Gemini API:</span> Nustatomas per <code>API_KEY</code>.
-                  </div>
-                </li>
-                <li className="flex gap-2 items-start">
-                  <span className="font-bold text-amber-600">2.</span>
-                  <div>
-                    <span className="font-semibold">Google Drive:</span> Reikalingas OAuth Client ID (pvz. <code>...apps.googleusercontent.com</code>), įklijuokite jį į <code>App.tsx</code> kintamąjį <code>GOOGLE_CLIENT_ID</code>.
-                  </div>
-                </li>
+              
+              <div className="flex flex-col gap-2">
+                 <input
+                    type="text"
+                    value={tempClientId}
+                    onChange={(e) => setTempClientId(e.target.value)}
+                    placeholder="Įklijuokite Client ID čia..."
+                    className="w-full text-sm p-2 rounded border border-amber-300 bg-white text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                 />
+                 <button 
+                    onClick={handleSaveClientId}
+                    className="bg-amber-600 hover:bg-amber-700 text-white text-sm py-1.5 px-3 rounded font-medium transition-colors self-start"
+                 >
+                    Išsaugoti ID
+                 </button>
+              </div>
+
+              <ul className="mt-3 space-y-1 text-xs text-amber-800">
+                <li>• Client ID rasite Google Cloud Console.</li>
+                <li>• Jis atrodo taip: <code>123...apps.googleusercontent.com</code></li>
               </ul>
             </div>
           )}

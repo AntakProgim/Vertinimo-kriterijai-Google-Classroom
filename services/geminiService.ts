@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { RubricData } from "../types";
+import { API_KEY } from "../config";
 
 const SYSTEM_INSTRUCTION = `
 You are an expert educational consultant specialized in creating grading rubrics for Google Classroom.
@@ -48,15 +49,14 @@ const rubricSchema: Schema = {
 
 export const generateRubricFromGemini = async (
   assignmentText: string,
-  apiKey: string,
   maxScore: number = 100,
   fileData?: { mimeType: string; data: string }
 ): Promise<RubricData> => {
-  if (!apiKey) {
+  if (!API_KEY) {
     throw new Error("Trūksta API rakto (API Key).");
   }
 
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI({ apiKey: API_KEY });
 
   try {
     const promptText = `Create a detailed grading rubric for this assignment.
