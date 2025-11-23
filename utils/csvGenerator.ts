@@ -1,5 +1,31 @@
 import { RubricData } from '../types';
 
+export const validateRubric = (rubric: RubricData | null): string | null => {
+  if (!rubric || !rubric.criteria || rubric.criteria.length === 0) {
+    return "Lentelėje nėra kriterijų.";
+  }
+  
+  for (let i = 0; i < rubric.criteria.length; i++) {
+    const criterion = rubric.criteria[i];
+    if (!criterion.title || !criterion.title.trim()) {
+      return `Kriterijus #${i + 1} neturi pavadinimo.`;
+    }
+    
+    if (!criterion.levels || criterion.levels.length === 0) {
+      return `Kriterijus "${criterion.title}" neturi lygių.`;
+    }
+    
+    for (let j = 0; j < criterion.levels.length; j++) {
+      const level = criterion.levels[j];
+      if (level.points === undefined || level.points === null || isNaN(level.points)) {
+        return `Kriterijuje "${criterion.title}" lygis #${j + 1} turi netinkamą balų skaičių.`;
+      }
+    }
+  }
+
+  return null;
+};
+
 /**
  * Converts rubric data to a CSV string format compatible with Google Classroom (Spreadsheet style).
  * 

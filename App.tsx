@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Sparkles, GraduationCap, AlertCircle, Loader2, ExternalLink, Settings2, CheckCircle, Upload, X, File as FileIcon, HardDrive, HelpCircle, Settings } from 'lucide-react';
 import { generateRubricFromGemini } from './services/geminiService';
-import { generateClassroomCSV, downloadCSV } from './utils/csvGenerator';
+import { generateClassroomCSV, downloadCSV, validateRubric } from './utils/csvGenerator';
 import { RubricData, GenerationStatus } from './types';
 import { RubricPreview } from './components/RubricPreview';
 import { API_KEY } from './config';
@@ -23,6 +23,7 @@ interface ErrorState {
   title: string;
   message: string;
   suggestion?: string;
+  details?: string;
 }
 
 declare global {
@@ -42,6 +43,7 @@ const App: React.FC = () => {
   const [attachedFile, setAttachedFile] = useState<AttachedFile | null>(null);
   const [driveApiReady, setDriveApiReady] = useState(false);
   const [isSavingToDrive, setIsSavingToDrive] = useState(false);
+  const [driveStatus, setDriveStatus] = useState('');
   
   // Configuration State
   const [googleClientId, setGoogleClientId] = useState<string>(() => {
@@ -127,7 +129,8 @@ const App: React.FC = () => {
       let errorState: ErrorState = {
         title: "Generavimo klaida",
         message: "Nepavyko sugeneruoti vertinimo lentelės.",
-        suggestion: "Pabandykite dar kartą arba sutrumpinkite užduoties aprašymą."
+        suggestion: "Pabandykite dar kartą arba sutrumpinkite užduoties aprašymą.",
+        details: err.message
       };
 
       // Identify common Gemini/Network errors
@@ -161,6 +164,17 @@ const App: React.FC = () => {
   const handleDownload = (filename: string) => {
     if (!rubric) return;
     
+    // Validate rubric before download
+    const validationError = validateRubric(rubric);
+    if (validationError) {
+      setError({
+        title: "Validacijos klaida",
+        message: validationError,
+        suggestion: "Prašome užpildyti trūkstamą informaciją lentelėje."
+      });
+      return;
+    }
+
     let finalFilename = filename.trim();
     if (!finalFilename) finalFilename = 'rubric.csv';
     if (!finalFilename.toLowerCase().endsWith('.csv')) {
@@ -184,7 +198,8 @@ const App: React.FC = () => {
       setError({
         title: "Išsaugojimo klaida",
         message: "Nepavyko išsaugoti duomenų naršyklėje.",
-        suggestion: "Patikrinkite naršyklės nustatymus arba atlaisvinkite vietos."
+        suggestion: "Patikrinkite naršyklės nustatymus arba atlaisvinkite vietos.",
+        details: (e as Error).message
       });
     }
   };
@@ -192,11 +207,22 @@ const App: React.FC = () => {
   const handleSaveToDrive = (filename: string) => {
     if (!rubric) return;
     
+    // Validate rubric before initiating Drive save
+    const validationError = validateRubric(rubric);
+    if (validationError) {
+      setError({
+        title: "Validacijos klaida",
+        message: validationError,
+        suggestion: "Prašome užpildyti trūkstamą informaciją lentelėje."
+      });
+      return;
+    }
+    
     if (!googleClientId) {
       setError({
-        title: "Nėra Client ID",
-        message: "Google Drive integracija nesukonfigūruota.",
-        suggestion: "Įveskite Client ID nustatymuose (krumpliaratis viršuje) arba šoniniame skydelyje."
+        title: "Prijunkite Google Drive",
+        message: "Norėdami naudotis šia funkcija, turite sukonfigūruoti Google Drive integraciją.",
+        suggestion: "Įveskite Client ID nustatymų lange, kuris tuoj atsidarys."
       });
       setShowSettings(true); // Open settings to help user
       return;
@@ -216,6 +242,7 @@ const App: React.FC = () => {
     }
 
     setIsSavingToDrive(true);
+    setDriveStatus('Autentifikuojama...');
 
     const tokenClient = window.google.accounts.oauth2.initTokenClient({
       client_id: googleClientId,
@@ -225,11 +252,14 @@ const App: React.FC = () => {
           setError({
             title: "Autentifikavimo klaida",
             message: "Nepavyko prisijungti prie Google paskyros.",
-            suggestion: "Patikrinkite ar Client ID yra teisingas."
+            suggestion: "Patikrinkite ar Client ID yra teisingas.",
+            details: JSON.stringify(response)
           });
           setIsSavingToDrive(false);
+          setDriveStatus('');
           return;
         }
+        setDriveStatus('Pasirinkite aplanką...');
         // Use Picker to select folder
         createFolderPicker(response.access_token, filename);
       },
@@ -244,6 +274,7 @@ const App: React.FC = () => {
             message: "Google Picker API nepavyko užkrauti.",
         });
         setIsSavingToDrive(false);
+        setDriveStatus('');
         return;
     }
 
@@ -265,9 +296,11 @@ const App: React.FC = () => {
     if (data.action === window.google.picker.Action.PICKED) {
       const doc = data.docs[0];
       const folderId = doc.id;
+      setDriveStatus('Įkeliama...');
       await uploadToDrive(oauthToken, folderId, filename);
     } else if (data.action === window.google.picker.Action.CANCEL) {
       setIsSavingToDrive(false);
+      setDriveStatus('');
     }
   };
 
@@ -310,10 +343,12 @@ const App: React.FC = () => {
       setError({
         title: "Įkėlimo klaida",
         message: "Nepavyko įkelti failo į Google Drive.",
-        suggestion: "Patikrinkite interneto ryšį ir bandykite dar kartą."
+        suggestion: "Patikrinkite interneto ryšį ir bandykite dar kartą.",
+        details: (e as Error).message
       });
     } finally {
       setIsSavingToDrive(false);
+      setDriveStatus('');
     }
   };
 
@@ -401,9 +436,9 @@ const App: React.FC = () => {
 
     if (!googleClientId) {
       setError({
-        title: "Nėra Client ID",
-        message: "Google Drive integracija nesukonfigūruota.",
-        suggestion: "Įveskite Client ID nustatymuose."
+        title: "Prijunkite Google Drive",
+        message: "Norėdami pasiekti failus, turite sukonfigūruoti Google Drive integraciją.",
+        suggestion: "Įveskite Client ID nustatymų lange."
       });
       setShowSettings(true);
       return;
@@ -427,7 +462,8 @@ const App: React.FC = () => {
           setError({
             title: "Prisijungimo klaida",
             message: "Nepavyko prisijungti prie Google Drive.",
-            suggestion: "Patikrinkite Client ID ir ar leidote iššokančius langus."
+            suggestion: "Patikrinkite Client ID ir ar leidote iššokančius langus.",
+            details: JSON.stringify(response)
           });
           return;
         }
@@ -503,7 +539,8 @@ const App: React.FC = () => {
         setError({
           title: "Failo atsisiuntimo klaida",
           message: "Nepavyko gauti failo iš Google Drive.",
-          suggestion: "Patikrinkite, ar turite teises atsisiųsti šį failą."
+          suggestion: "Patikrinkite, ar turite teises atsisiųsti šį failą.",
+          details: (err as Error).message
         });
         setStatus(GenerationStatus.IDLE);
       }
@@ -654,13 +691,25 @@ const App: React.FC = () => {
                     <div className="h-px bg-slate-200 flex-1"></div>
                   </div>
 
-                  <button
-                    onClick={handleDriveClick}
-                    className="mt-4 flex items-center gap-2 bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 hover:border-slate-400 transition-all shadow-sm z-10"
-                  >
-                    <HardDrive size={16} className="text-slate-500" />
-                    Google Drive
-                  </button>
+                  <div className="mt-4 flex items-center gap-2 z-10">
+                    <button
+                      onClick={handleDriveClick}
+                      className="flex items-center gap-2 bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 hover:border-slate-400 transition-all shadow-sm"
+                    >
+                      <HardDrive size={16} className="text-slate-500" />
+                      Google Drive
+                    </button>
+                    <div 
+                      className="relative group" 
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <HelpCircle size={18} className="text-slate-400 hover:text-slate-600 cursor-help transition-colors" />
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-60 p-2 bg-slate-800 text-white text-xs rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all text-center pointer-events-none z-50">
+                        Google Drive integracijai reikalingas sukonfigūruotas Client ID. Gali būti prašoma suteikti leidimus.
+                        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div>
+                      </div>
+                    </div>
+                  </div>
                   
                   <p className="text-xs text-slate-400 mt-4">Palaikoma: PDF, TXT, Paveikslėliai</p>
                 </div>
@@ -745,10 +794,18 @@ const App: React.FC = () => {
                   <span className="font-bold text-red-800 block mb-1">{error.title}</span>
                   <p className="text-red-700 mb-2">{error.message}</p>
                   {error.suggestion && (
-                    <p className="text-red-600 text-xs bg-red-100/50 p-2 rounded flex items-center gap-1.5">
+                    <p className="text-red-600 text-xs bg-red-100/50 p-2 rounded flex items-center gap-1.5 mb-2">
                       <HelpCircle size={12} />
                       {error.suggestion}
                     </p>
+                  )}
+                  {error.details && (
+                    <details className="text-xs text-red-800/70 mt-1">
+                      <summary className="cursor-pointer hover:text-red-800 font-medium select-none">Detali klaidos informacija</summary>
+                      <pre className="mt-1 whitespace-pre-wrap font-mono text-[10px] bg-white/50 p-2 rounded border border-red-100 overflow-x-auto">
+                        {error.details}
+                      </pre>
+                    </details>
                   )}
                 </div>
               </div>
@@ -822,6 +879,7 @@ const App: React.FC = () => {
              onSave={handleSave}
              onSaveToDrive={handleSaveToDrive}
              isSavingToDrive={isSavingToDrive}
+             driveStatusMessage={driveStatus}
              onRubricChange={handleRubricChange} 
            />
         </div>
