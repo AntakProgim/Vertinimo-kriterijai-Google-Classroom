@@ -41,6 +41,7 @@ const App: React.FC = () => {
   const [attachedFile, setAttachedFile] = useState<AttachedFile | null>(null);
   const [driveApiReady, setDriveApiReady] = useState(false);
   const [isSavingToDrive, setIsSavingToDrive] = useState(false);
+  const [showConfigWarning, setShowConfigWarning] = useState(true);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -176,7 +177,7 @@ const App: React.FC = () => {
       setError({
         title: "Nėra Client ID",
         message: "Google Drive integracija nesukonfigūruota.",
-        suggestion: "Pridėkite GOOGLE_CLIENT_ID kode."
+        suggestion: "Pridėkite GOOGLE_CLIENT_ID kode norėdami naudoti Drive funkciją."
       });
       return;
     }
@@ -701,35 +702,33 @@ const App: React.FC = () => {
             </ul>
           </div>
 
-          {!GOOGLE_CLIENT_ID && (
-            <div className="bg-amber-50 rounded-xl border border-amber-200 p-6">
+          {!GOOGLE_CLIENT_ID && showConfigWarning && (
+            <div className="relative bg-amber-50 rounded-xl border border-amber-200 p-6">
+              <button 
+                onClick={() => setShowConfigWarning(false)}
+                className="absolute top-2 right-2 p-1 text-amber-500 hover:bg-amber-100 rounded-full transition-colors"
+                title="Uždaryti"
+              >
+                <X size={16} />
+              </button>
               <h3 className="text-amber-900 font-semibold mb-3 text-sm flex items-center gap-2">
                 <AlertCircle size={16} />
-                API Raktų Konfigūracija
+                Konfigūracija
               </h3>
               <p className="text-sm text-amber-800 mb-3 leading-relaxed">
-                Šis pranešimas rodomas, nes nenustatytas <code>GOOGLE_CLIENT_ID</code>. Norėdami pilnai naudotis sistema:
+                Norėdami naudotis Google Drive funkcija, turite sukonfigūruoti Client ID. Generavimui (DI) pakanka API rakto.
               </p>
               <ul className="space-y-3 text-sm text-amber-800">
                 <li className="flex gap-2 items-start">
                   <span className="font-bold text-amber-600">1.</span>
                   <div>
-                    <span className="font-semibold">Gemini API:</span> Gaukite raktą iš{' '}
-                    <a 
-                      href="https://ai.google.dev/gemini-api/docs/api-key" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="underline font-medium text-amber-900 hover:text-amber-700"
-                    >
-                      Google AI Studio
-                    </a>
-                    {' '}ir nustatykite aplinkos kintamąjį <code>API_KEY</code>.
+                    <span className="font-semibold">Gemini API:</span> Nustatomas per <code>API_KEY</code>.
                   </div>
                 </li>
                 <li className="flex gap-2 items-start">
                   <span className="font-bold text-amber-600">2.</span>
                   <div>
-                    <span className="font-semibold">Google Drive:</span> Sukurkite OAuth Client ID Google Cloud Console ir įklijuokite į <code>App.tsx</code> kintamąjį <code>GOOGLE_CLIENT_ID</code>.
+                    <span className="font-semibold">Google Drive:</span> Reikalingas OAuth Client ID (pvz. <code>...apps.googleusercontent.com</code>), įklijuokite jį į <code>App.tsx</code> kintamąjį <code>GOOGLE_CLIENT_ID</code>.
                   </div>
                 </li>
               </ul>
