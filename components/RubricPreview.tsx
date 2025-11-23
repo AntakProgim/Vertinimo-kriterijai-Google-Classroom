@@ -106,8 +106,8 @@ export const RubricPreview: React.FC<RubricPreviewProps> = ({
                 value={filename}
                 onChange={(e) => setFilename(e.target.value)}
                 onBlur={handleBlur}
-                className="w-36 pl-8 pr-2 py-2 bg-white border border-slate-300 rounded-l-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 hover:border-slate-400 transition-colors text-slate-700"
-                placeholder="failas.csv"
+                className="w-48 pl-8 pr-2 py-2 bg-white border border-slate-300 rounded-l-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 hover:border-slate-400 transition-colors text-slate-700"
+                placeholder="rubric.csv"
              />
           </div>
 
