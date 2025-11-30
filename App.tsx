@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, GraduationCap, AlertCircle, Loader2, ExternalLink, Settings2, CheckCircle, Upload, X, File as FileIcon, HardDrive, HelpCircle, Settings } from 'lucide-react';
+import { Sparkles, GraduationCap, AlertCircle, Loader2, ExternalLink, Settings2, CheckCircle, Upload, X, File as FileIcon, HardDrive, HelpCircle, Settings, Trash2 } from 'lucide-react';
 import { generateRubricFromGemini } from './services/geminiService';
 import { generateClassroomCSV, downloadCSV, validateRubric } from './utils/csvGenerator';
 import { RubricData, GenerationStatus } from './types';
@@ -24,6 +24,10 @@ interface ErrorState {
   message: string;
   suggestion?: string;
   details?: string;
+  link?: {
+    text: string;
+    url: string;
+  };
 }
 
 declare global {
@@ -88,6 +92,15 @@ const App: React.FC = () => {
     return () => clearInterval(checkGoogle);
   }, []);
 
+  const normalizeFilename = (filename: string): string => {
+    let safeFilename = filename.trim();
+    if (!safeFilename) safeFilename = 'rubric.csv';
+    if (!safeFilename.toLowerCase().endsWith('.csv')) {
+      safeFilename += '.csv';
+    }
+    return safeFilename;
+  };
+
   const handleSaveClientId = () => {
     const cleaned = tempClientId.trim();
     if (cleaned) {
@@ -95,6 +108,26 @@ const App: React.FC = () => {
       localStorage.setItem('google_client_id', cleaned);
       setTempClientId('');
       setShowSettings(false); // Close settings if open
+    }
+  };
+
+  const handleClearData = () => {
+    if (window.confirm('Ar tikrai norite išvalyti visus išsaugotus duomenis ir nustatymus?')) {
+      // Clear Local Storage
+      localStorage.removeItem('rubric_data');
+      localStorage.removeItem('google_client_id');
+
+      // Reset State
+      setRubric(null);
+      setGoogleClientId(DEFAULT_CLIENT_ID);
+      setTempClientId('');
+      setAssignmentText('');
+      setAttachedFile(null);
+      setStatus(GenerationStatus.IDLE);
+      setError(null);
+      setSaveMessage('Duomenys sėkmingai išvalyti.');
+      setTimeout(() => setSaveMessage(null), 3000);
+      setShowSettings(false);
     }
   };
 
@@ -108,7 +141,11 @@ const App: React.FC = () => {
       setError({
         title: "Konfigūracijos klaida",
         message: "Sistemoje nerastas API raktas (API_KEY).",
-        suggestion: "Susisiekite su sistemos administratoriumi."
+        suggestion: "Susisiekite su sistemos administratoriumi arba gaukite raktą:",
+        link: {
+          text: "Google AI Studio",
+          url: "https://aistudio.google.com/app/apikey"
+        }
       });
       setStatus(GenerationStatus.ERROR);
       return;
@@ -138,7 +175,11 @@ const App: React.FC = () => {
         if (err.message.includes('429') || err.message.toLowerCase().includes('quota')) {
           errorState.title = "Viršytas užklausų limitas";
           errorState.message = "Sistema šiuo metu apkrauta arba viršytas API limitas.";
-          errorState.suggestion = "Palaukite minutę ir bandykite dar kartą.";
+          errorState.suggestion = "Palaukite minutę arba patikrinkite kvotas:";
+          errorState.link = {
+            text: "Google Cloud Console",
+            url: "https://console.cloud.google.com/apis/dashboard"
+          };
         } else if (err.message.includes('400') || err.message.toLowerCase().includes('invalid')) {
           errorState.title = "Neteisinga užklausa";
           errorState.message = "DI negalėjo apdoroti pateikto failo ar teksto.";
@@ -175,11 +216,7 @@ const App: React.FC = () => {
       return;
     }
 
-    let finalFilename = filename.trim();
-    if (!finalFilename) finalFilename = 'rubric.csv';
-    if (!finalFilename.toLowerCase().endsWith('.csv')) {
-      finalFilename += '.csv';
-    }
+    const finalFilename = normalizeFilename(filename);
     
     // Call without title, as per v1.0-s format
     const csv = generateClassroomCSV(rubric);
@@ -218,14 +255,19 @@ const App: React.FC = () => {
       return;
     }
     
+    // Explicitly check if Google Client ID is configured
     if (!googleClientId) {
       setError({
-        title: "Prijunkite Google Drive",
+        title: "Google Drive nekonfigūruotas",
         message: "Norėdami naudotis šia funkcija, turite sukonfigūruoti Google Drive integraciją.",
-        suggestion: "Įveskite Client ID nustatymų lange, kuris tuoj atsidarys."
+        suggestion: "Įveskite Client ID nustatymų lange.",
+        link: {
+          text: "Google Cloud Console Credentials",
+          url: "https://console.cloud.google.com/apis/credentials"
+        }
       });
-      setShowSettings(true); // Open settings to help user
-      return;
+      setShowSettings(true); // Help the user by opening settings
+      return; // Stop execution here
     }
 
     if (!driveApiReady) {
@@ -240,6 +282,9 @@ const App: React.FC = () => {
     if (!window.confirm('Are you sure you want to save to Google Drive?')) {
       return;
     }
+
+    // Normalize filename once at the start of the process
+    const safeFilename = normalizeFilename(filename);
 
     setIsSavingToDrive(true);
     setDriveStatus('Autentifikuojama...');
@@ -256,12 +301,13 @@ const App: React.FC = () => {
             details: JSON.stringify(response)
           });
           setIsSavingToDrive(false);
-          setDriveStatus('');
+          setDriveStatus('Klaida!');
+          setTimeout(() => setDriveStatus(''), 3000);
           return;
         }
         setDriveStatus('Pasirinkite aplanką...');
-        // Use Picker to select folder
-        createFolderPicker(response.access_token, filename);
+        // Use Picker to select folder, passing the normalized filename
+        createFolderPicker(response.access_token, safeFilename);
       },
     });
     tokenClient.requestAccessToken();
@@ -274,7 +320,8 @@ const App: React.FC = () => {
             message: "Google Picker API nepavyko užkrauti.",
         });
         setIsSavingToDrive(false);
-        setDriveStatus('');
+        setDriveStatus('Klaida!');
+        setTimeout(() => setDriveStatus(''), 3000);
         return;
     }
 
@@ -332,11 +379,24 @@ const App: React.FC = () => {
         body: form,
       });
 
-      if (!res.ok) throw new Error(`Upload failed: ${res.statusText}`);
+      if (!res.ok) {
+        let errorMessage = `Upload failed: ${res.statusText}`;
+        try {
+            const errorBody = await res.json();
+            if (errorBody?.error?.message) {
+                errorMessage += ` (${errorBody.error.message})`;
+            }
+        } catch (ignore) {
+            // Fallback to statusText only if JSON parsing fails
+        }
+        throw new Error(errorMessage);
+      }
       
       const result = await res.json();
       setSaveMessage("Sėkmingai išsaugota Google Drive!");
-      setTimeout(() => setSaveMessage(null), 3000);
+      
+      setDriveStatus('Išsaugota!');
+      setTimeout(() => setDriveStatus(''), 3000);
 
     } catch (e) {
       console.error(e);
@@ -346,9 +406,10 @@ const App: React.FC = () => {
         suggestion: "Patikrinkite interneto ryšį ir bandykite dar kartą.",
         details: (e as Error).message
       });
+      setDriveStatus('Klaida!');
+      setTimeout(() => setDriveStatus(''), 3000);
     } finally {
       setIsSavingToDrive(false);
-      setDriveStatus('');
     }
   };
 
@@ -436,9 +497,13 @@ const App: React.FC = () => {
 
     if (!googleClientId) {
       setError({
-        title: "Prijunkite Google Drive",
-        message: "Norėdami pasiekti failus, turite sukonfigūruoti Google Drive integraciją.",
-        suggestion: "Įveskite Client ID nustatymų lange."
+        title: "Nėra Client ID",
+        message: "Google Drive integracija nesukonfigūruota.",
+        suggestion: "Įveskite Client ID nustatymuose arba gaukite jį čia:",
+        link: {
+          text: "Google Cloud Console Credentials",
+          url: "https://console.cloud.google.com/apis/credentials"
+        }
       });
       setShowSettings(true);
       return;
@@ -615,12 +680,30 @@ const App: React.FC = () => {
                  Išsaugoti
                </button>
              </div>
+
+             <div className="mb-4 p-3 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-800">
+                <p className="font-semibold mb-1 flex items-center gap-1"><AlertCircle size={12}/> Svarbu (OAuth klaida):</p>
+                <p className="mb-1 leading-relaxed">Jei matote klaidą "neatitinka OAuth politikos", Google Cloud Console prie <strong>Authorized JavaScript origins</strong> pridėkite šį adresą:</p>
+                <code className="block bg-white p-2 rounded border border-blue-200 font-mono select-all break-all text-[10px]">
+                  {typeof window !== 'undefined' ? window.location.origin : ''}
+                </code>
+             </div>
              
              {googleClientId && (
                <div className="p-3 bg-green-50 border border-green-200 rounded text-xs text-green-700 flex gap-2 items-center">
                  <CheckCircle size={14} /> Client ID sukonfigūruotas
                </div>
              )}
+
+             <div className="mt-6 pt-4 border-t border-slate-100">
+               <button
+                 onClick={handleClearData}
+                 className="w-full flex items-center justify-center gap-2 text-red-600 hover:text-red-700 hover:bg-red-50 py-2 rounded-lg text-sm font-medium transition-colors"
+               >
+                 <Trash2 size={16} />
+                 Išvalyti duomenis ir nustatymus
+               </button>
+             </div>
           </div>
         )}
 
@@ -794,10 +877,26 @@ const App: React.FC = () => {
                   <span className="font-bold text-red-800 block mb-1">{error.title}</span>
                   <p className="text-red-700 mb-2">{error.message}</p>
                   {error.suggestion && (
-                    <p className="text-red-600 text-xs bg-red-100/50 p-2 rounded flex items-center gap-1.5 mb-2">
-                      <HelpCircle size={12} />
-                      {error.suggestion}
-                    </p>
+                    <div className="text-red-600 text-xs bg-red-100/50 p-2 rounded flex items-start gap-1.5 mb-2">
+                      <HelpCircle size={12} className="mt-0.5 flex-shrink-0" />
+                      <span>
+                        {error.suggestion}
+                        {error.link && (
+                          <>
+                            {' '}
+                            <a 
+                              href={error.link.url} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="underline hover:text-red-800 font-medium inline-flex items-center gap-0.5"
+                            >
+                              {error.link.text}
+                              <ExternalLink size={10} />
+                            </a>
+                          </>
+                        )}
+                      </span>
+                    </div>
                   )}
                   {error.details && (
                     <details className="text-xs text-red-800/70 mt-1">
