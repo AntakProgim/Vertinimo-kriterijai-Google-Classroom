@@ -1,14 +1,11 @@
 import React, { useState } from 'react';
 import { RubricData, RubricCriterion, RubricLevel } from '../types';
-import { Download, Table, Calculator, Save, HardDrive, Loader2, FileType } from 'lucide-react';
+import { Download, Table, Calculator, Save, FileType } from 'lucide-react';
 
 interface RubricPreviewProps {
   rubric: RubricData | null;
   onDownload: (filename: string) => void;
   onSave: () => void;
-  onSaveToDrive: (filename: string) => void;
-  isSavingToDrive?: boolean;
-  driveStatusMessage?: string;
   onRubricChange: (rubric: RubricData) => void;
 }
 
@@ -16,9 +13,6 @@ export const RubricPreview: React.FC<RubricPreviewProps> = ({
   rubric, 
   onDownload, 
   onSave, 
-  onSaveToDrive,
-  isSavingToDrive = false,
-  driveStatusMessage,
   onRubricChange 
 }) => {
   const [filename, setFilename] = useState('rubric.csv');
@@ -87,18 +81,6 @@ export const RubricPreview: React.FC<RubricPreviewProps> = ({
           >
             <Save size={16} />
             <span className="hidden lg:inline">Išsaugoti</span>
-          </button>
-          
-          <button
-            onClick={() => onSaveToDrive(filename)}
-            disabled={isSavingToDrive}
-            className="flex items-center gap-2 bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 px-3 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm disabled:opacity-75 disabled:cursor-not-allowed"
-            title="Įkelti į Google Drive"
-          >
-            {isSavingToDrive ? <Loader2 size={16} className="animate-spin" /> : <HardDrive size={16} />}
-            <span className="hidden lg:inline">
-               {isSavingToDrive && driveStatusMessage ? driveStatusMessage : 'Į Drive'}
-            </span>
           </button>
 
           <div className="h-6 w-px bg-slate-300 mx-1"></div>
