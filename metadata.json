@@ -1,5 +1,8 @@
 {
   "name": "Vertinimo kriterijai Google Classroom",
   "description": "Generuokite Google Classroom tinkamas vertinimo lenteles (CSV/Sheets) iš užduočių aprašymų naudodami Gemini DI.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

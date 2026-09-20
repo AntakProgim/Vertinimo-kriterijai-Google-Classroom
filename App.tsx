@@ -84,10 +84,10 @@ const App: React.FC = () => {
     if (!API_KEY) {
       setError({
         title: "Konfigūracijos klaida",
-        message: "Sistemoje nerastas API raktas (API_KEY).",
-        suggestion: "Susisiekite su sistemos administratoriumi arba gaukite raktą:",
+        message: "Sistemoje nerastas Gemini API raktas (GEMINI_API_KEY).",
+        suggestion: "Render.com skiltyje „Environment“ pridėkite kintamąjį GEMINI_API_KEY (arba API_KEY) su savo raktu ir atlikite Deploy iš naujo.",
         link: {
-          text: "Google AI Studio",
+          text: "Google AI Studio raktai",
           url: "https://aistudio.google.com/app/apikey"
         }
       });
