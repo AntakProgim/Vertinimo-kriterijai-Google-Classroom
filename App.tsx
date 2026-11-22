@@ -335,7 +335,7 @@ const App: React.FC = () => {
       <main className="flex-1 max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8 grid grid-cols-1 lg:grid-cols-12 gap-6 relative">
         
         {/* Input Column */}
-        <div className="lg:col-span-5 flex flex-col gap-6">
+        <div className="lg:col-span-5 lg:sticky lg:top-24 lg:self-start flex flex-col gap-6">
           <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
               <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-600 text-xs">1</span>
@@ -532,7 +532,7 @@ const App: React.FC = () => {
         </div>
 
         {/* Output Column */}
-        <div className="lg:col-span-7 h-[600px] lg:h-auto flex flex-col">
+        <div className="lg:col-span-7 flex flex-col">
            <RubricPreview 
              rubric={rubric} 
              onDownload={handleDownload} 
