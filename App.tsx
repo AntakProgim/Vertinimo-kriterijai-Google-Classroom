@@ -4,7 +4,6 @@ import { generateRubricFromGemini } from './services/geminiService';
 import { generateClassroomCSV, downloadCSV, validateRubric } from './utils/csvGenerator';
 import { RubricData, GenerationStatus } from './types';
 import { RubricPreview } from './components/RubricPreview';
-import { API_KEY } from './config';
 
 interface AttachedFile {
   name: string;
@@ -80,20 +79,6 @@ const App: React.FC = () => {
 
     setStatus(GenerationStatus.GENERATING);
     setError(null);
-    
-    if (!API_KEY) {
-      setError({
-        title: "Konfigūracijos klaida",
-        message: "Sistemoje nerastas Gemini API raktas (GEMINI_API_KEY).",
-        suggestion: "Render.com skiltyje „Environment“ pridėkite kintamąjį GEMINI_API_KEY (arba API_KEY) su savo raktu ir atlikite Deploy iš naujo.",
-        link: {
-          text: "Google AI Studio raktai",
-          url: "https://aistudio.google.com/app/apikey"
-        }
-      });
-      setStatus(GenerationStatus.ERROR);
-      return;
-    }
 
     const targetScore = maxPoints > 0 ? maxPoints : 100;
 
@@ -116,14 +101,18 @@ const App: React.FC = () => {
 
       // Identify common Gemini/Network errors
       if (err.message) {
-        if (err.message.includes('429') || err.message.toLowerCase().includes('quota')) {
+        if (err.message.includes('429') || err.message.toLowerCase().includes('quota') || err.message.includes('RESOURCE_EXHAUSTED')) {
           errorState.title = "Viršytas užklausų limitas";
           errorState.message = "Sistema šiuo metu apkrauta arba viršytas API limitas.";
-          errorState.suggestion = "Palaukite minutę arba patikrinkite kvotas:";
+          errorState.suggestion = "Palaukite minutę arba patikrinkite kvotas Settings > Secrets arba Google Cloud Console:";
           errorState.link = {
             text: "Google Cloud Console",
             url: "https://console.cloud.google.com/apis/dashboard"
           };
+        } else if (err.message.includes('403') || err.message.includes('PERMISSION_DENIED') || err.message.includes('API_KEY_INVALID')) {
+          errorState.title = "API rakto klaida";
+          errorState.message = "Gemini API raktas neteisingas arba neturi prieigos teisių.";
+          errorState.suggestion = "Patikrinkite GEMINI_API_KEY nustatymuose (Settings > Secrets arba Render Environment).";
         } else if (err.message.includes('400') || err.message.toLowerCase().includes('invalid')) {
           errorState.title = "Neteisinga užklausa";
           errorState.message = "DI negalėjo apdoroti pateikto failo ar teksto.";
@@ -134,8 +123,10 @@ const App: React.FC = () => {
           errorState.suggestion = "Peržiūrėkite tekstą, ar jame nėra neleistino turinio, ir bandykite dar kartą.";
         } else if (err.message.includes('500') || err.message.includes('503')) {
           errorState.title = "Serverio klaida";
-          errorState.message = "Google DI serveriai šiuo metu nepasiekiami.";
-          errorState.suggestion = "Bandykite vėliau.";
+          errorState.message = err.message.includes('GEMINI_API_KEY') ? err.message : "Google DI serveriai šiuo metu nepasiekiami.";
+          errorState.suggestion = err.message.includes('GEMINI_API_KEY')
+            ? "Pridėkite GEMINI_API_KEY aplinkos kintamąjį (Settings > Secrets arba Render Environment)."
+            : "Bandykite vėliau.";
         } else {
           errorState.message = err.message;
         }
