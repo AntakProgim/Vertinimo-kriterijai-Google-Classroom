@@ -1,5 +1,6 @@
 import express from 'express';
 import fs from 'node:fs';
+import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { GoogleGenAI, Type, type Schema } from '@google/genai';
@@ -120,6 +121,7 @@ async function generateWithRetry<T>(fn: () => Promise<T>, maxRetries = 2): Promi
 
 async function startServer() {
   const app = express();
+  const httpServer = http.createServer(app);
   app.use(express.json({ limit: '20mb' }));
 
   app.post('/api/rubric/generate', async (req, res) => {
@@ -211,7 +213,7 @@ ${assignmentText || 'See attached file for assignment details.'}`;
   if (isDev) {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { middlewareMode: true, hmr: { server: httpServer } },
       appType: 'spa',
     });
     app.use(vite.middlewares);
@@ -223,7 +225,7 @@ ${assignmentText || 'See attached file for assignment details.'}`;
   }
 
   const port = Number(process.env.PORT) || 3000;
-  app.listen(port, '0.0.0.0', () => {
+  httpServer.listen(port, '0.0.0.0', () => {
     console.log(`Server running on http://0.0.0.0:${port}`);
   });
 }
